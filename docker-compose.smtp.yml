@@ -1,0 +1,116 @@
+services:
+  mariadb:
+    image: mariadb:10.11
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: postalpassword
+      MARIADB_DATABASE: postal
+    healthcheck:
+      test: ["CMD-SHELL", "mariadb-admin ping -h localhost -uroot -ppostalpassword || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+    volumes:
+      - mariadb_data:/var/lib/mysql
+
+  postal-init:
+    build:
+      context: .
+      target: full
+    image: ${POSTAL_IMAGE:-postal-ci:local}
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    volumes:
+      - "./docker/ci-config:/config"
+    environment:
+      POSTAL_CONFIG_FILE_PATH: /config/postal.yml
+      POSTAL_SIGNING_KEY_PATH: /config/signing.key
+      MAIN_DB_HOST: mariadb
+      MAIN_DB_USERNAME: root
+      MAIN_DB_PASSWORD: postalpassword
+      MAIN_DB_DATABASE: postal
+      MESSAGE_DB_HOST: mariadb
+      MESSAGE_DB_USERNAME: root
+      MESSAGE_DB_PASSWORD: postalpassword
+      MESSAGE_DB_DATABASE_NAME_PREFIX: postal
+      WAIT_FOR_TARGETS: "mariadb:3306"
+      WAIT_FOR_TIMEOUT: 60
+      RAILS_ENVIRONMENT: production
+      RAILS_SECRET_KEY: 7f27856d26e864bafd49d0df37ad3d1339086e86ef0447e0f1814dde5277452fea97dab9e3aad6dfa11bfe359c82ce302d97bf1e58f6103c4408e4fbad4eeccf
+      POSTAL_CI_ORG: ci
+      POSTAL_CI_SERVER: smtp
+      POSTAL_CI_SERVER_MODE: ${POSTAL_CI_SERVER_MODE:-Live}
+      POSTAL_CI_DOMAIN: ${POSTAL_CI_DOMAIN:-yourdomain.com}
+      POSTAL_CI_CREDENTIAL_KEY: ${POSTAL_CI_CREDENTIAL_KEY:-postal-ci-key}
+    command: >
+      sh -c "postal initialize && postal ci-smtp-setup"
+
+  postal-smtp:
+    build:
+      context: .
+      target: full
+    image: ${POSTAL_IMAGE:-postal-ci:local}
+    restart: unless-stopped
+    depends_on:
+      postal-init:
+        condition: service_completed_successfully
+      mariadb:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:587:587"
+      - "127.0.0.1:2525:587"
+    volumes:
+      - "./docker/ci-config:/config"
+    environment:
+      POSTAL_CONFIG_FILE_PATH: /config/postal.yml
+      POSTAL_SIGNING_KEY_PATH: /config/signing.key
+      MAIN_DB_HOST: mariadb
+      MAIN_DB_USERNAME: root
+      MAIN_DB_PASSWORD: postalpassword
+      MESSAGE_DB_HOST: mariadb
+      MESSAGE_DB_USERNAME: root
+      MESSAGE_DB_PASSWORD: postalpassword
+      MESSAGE_DB_DATABASE_NAME_PREFIX: postal
+      WAIT_FOR_TARGETS: "mariadb:3306"
+      WAIT_FOR_TIMEOUT: 60
+      RAILS_ENVIRONMENT: production
+      RAILS_SECRET_KEY: 7f27856d26e864bafd49d0df37ad3d1339086e86ef0447e0f1814dde5277452fea97dab9e3aad6dfa11bfe359c82ce302d97bf1e58f6103c4408e4fbad4eeccf
+      SMTP_SERVER_DEFAULT_PORT: 587
+      SMTP_SERVER_DEFAULT_BIND_ADDRESS: "0.0.0.0"
+    command: ["postal", "smtp-server"]
+
+  postal-worker:
+    build:
+      context: .
+      target: full
+    image: ${POSTAL_IMAGE:-postal-ci:local}
+    restart: unless-stopped
+    depends_on:
+      postal-init:
+        condition: service_completed_successfully
+      mariadb:
+        condition: service_healthy
+    volumes:
+      - "./docker/ci-config:/config"
+    environment:
+      POSTAL_CONFIG_FILE_PATH: /config/postal.yml
+      POSTAL_SIGNING_KEY_PATH: /config/signing.key
+      MAIN_DB_HOST: mariadb
+      MAIN_DB_USERNAME: root
+      MAIN_DB_PASSWORD: postalpassword
+      MESSAGE_DB_HOST: mariadb
+      MESSAGE_DB_USERNAME: root
+      MESSAGE_DB_PASSWORD: postalpassword
+      MESSAGE_DB_DATABASE_NAME_PREFIX: postal
+      WAIT_FOR_TARGETS: "mariadb:3306"
+      WAIT_FOR_TIMEOUT: 60
+      RAILS_ENVIRONMENT: production
+      RAILS_SECRET_KEY: 7f27856d26e864bafd49d0df37ad3d1339086e86ef0447e0f1814dde5277452fea97dab9e3aad6dfa11bfe359c82ce302d97bf1e58f6103c4408e4fbad4eeccf
+      POSTAL_OUTBOUND_SMTP_PORT: ${POSTAL_OUTBOUND_SMTP_PORT:-587}
+      POSTAL_OUTBOUND_SSL_MODE: ${POSTAL_OUTBOUND_SSL_MODE:-Auto}
+      POSTAL_SMTP_RELAYS: ${POSTAL_SMTP_RELAYS:-}
+    command: ["postal", "worker"]
+
+volumes:
+  mariadb_data:

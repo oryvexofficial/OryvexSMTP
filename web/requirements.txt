@@ -1,0 +1,5 @@
+# OryvexSMTP Web Portal
+# Note: The built-in web server in app.py uses the Python standard library
+# and has ZERO required external dependencies.
+# If you prefer running under a WSGI/ASGI or Flask wrapper, you can install:
+requests>=2.31.0

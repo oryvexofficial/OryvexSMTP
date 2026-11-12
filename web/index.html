@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OryvexSMTP Web Portal &amp; Cloudflare Setup</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --card-border: #334155;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --success: #10b981;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --terminal-bg: #030712;
+      --accent: #6366f1;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 20px;
+      min-height: 100vh;
+    }
+    .container { max-width: 1100px; margin: 0 auto; }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--card-border);
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-icon {
+      width: 42px;
+      height: 42px;
+      background: linear-gradient(135deg, var(--accent), var(--primary));
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 22px;
+      color: #fff;
+    }
+    .brand-title h1 { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.02em; }
+    .brand-title p { font-size: 0.85rem; color: var(--text-muted); }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 9999px;
+      font-size: 0.82rem;
+      font-weight: 500;
+      background-color: rgba(51, 65, 85, 0.6);
+      border: 1px solid var(--card-border);
+    }
+    .badge-dot { width: 8px; height: 8px; border-radius: 50%; background-color: #eab308; }
+    .badge-dot.online { background-color: var(--success); box-shadow: 0 0 8px var(--success); }
+    .badge-dot.offline { background-color: var(--danger); box-shadow: 0 0 8px var(--danger); }
+    
+    .notice {
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 0.88rem;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    .notice-icon { font-size: 1.2rem; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 20px;
+    }
+    @media (min-width: 920px) {
+      .grid { grid-template-columns: 1.15fr 0.85fr; }
+    }
+    .card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+    }
+    .card-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .form-group { margin-bottom: 14px; }
+    label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 500;
+      margin-bottom: 5px;
+      color: var(--text-muted);
+    }
+    input, textarea, select {
+      width: 100%;
+      padding: 9px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--card-border);
+      background-color: #0b1329;
+      color: var(--text);
+      font-size: 0.92rem;
+      transition: border-color 0.2s;
+    }
+    input:focus, textarea:focus, select:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+    textarea { resize: vertical; min-height: 80px; }
+    
+    .preset-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 14px;
+    }
+    .preset-btn {
+      background: #334155;
+      color: #cbd5e1;
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.2s;
+    }
+    .preset-btn:hover { background: #475569; color: #fff; }
+    .preset-btn.active {
+      background: rgba(59, 130, 246, 0.2);
+      border-color: var(--primary);
+      color: #93c5fd;
+      font-weight: 600;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.95rem;
+      cursor: pointer;
+      border: none;
+      transition: background-color 0.2s, transform 0.1s;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      color: #fff;
+      width: 100%;
+    }
+    .btn-primary:hover { background: linear-gradient(135deg, #1d4ed8, #1e40af); }
+    .btn-primary:active { transform: scale(0.99); }
+    .btn-secondary {
+      background-color: #334155;
+      color: var(--text);
+      font-size: 0.82rem;
+      padding: 5px 10px;
+    }
+    .btn-secondary:hover { background-color: #475569; }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .config-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    details {
+      margin-top: 12px;
+      margin-bottom: 14px;
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      background-color: rgba(11, 19, 41, 0.5);
+    }
+    summary {
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      user-select: none;
+    }
+    .terminal {
+      background-color: var(--terminal-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.8rem;
+      color: #38bdf8;
+      max-height: 250px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .terminal .term-in { color: #facc15; }
+    .terminal .term-out { color: #4ade80; }
+    .terminal .term-err { color: #f87171; }
+    .alert {
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      font-size: 0.9rem;
+      display: none;
+    }
+    .alert-success { background-color: rgba(16, 185, 129, 0.15); border: 1px solid var(--success); color: #6ee7b7; }
+    .alert-danger { background-color: rgba(239, 68, 68, 0.15); border: 1px solid var(--danger); color: #fca5a5; }
+    .history-table, .dns-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+      margin-top: 8px;
+    }
+    .history-table th, .history-table td, .dns-table th, .dns-table td {
+      padding: 8px;
+      text-align: left;
+      border-bottom: 1px solid var(--card-border);
+    }
+    .dns-table code {
+      background: #0b1329;
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: #38bdf8;
+      font-size: 0.78rem;
+      word-break: break-all;
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .status-ok { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+    .status-fail { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+    .copy-btn {
+      background: #1e293b;
+      border: 1px solid var(--card-border);
+      color: #94a3b8;
+      padding: 2px 6px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.72rem;
+    }
+    .copy-btn:hover { background: #334155; color: #fff; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="brand">
+        <div class="brand-icon">📬</div>
+        <div class="brand-title">
+          <h1>OryvexSMTP Web Portal</h1>
+          <p>Hosted on GitHub Actions &bull; Exposed via TryCloudflare &bull; Multi-Port Delivery</p>
+        </div>
+      </div>
+      <div class="badge" id="statusBadge">
+        <div class="badge-dot" id="statusDot"></div>
+        <span id="statusText">Checking SMTP...</span>
+        <button class="btn btn-secondary" onclick="checkStatus()" title="Refresh Status">↺</button>
+      </div>
+    </header>
+
+    <div class="notice">
+      <div class="notice-icon">💡</div>
+      <div>
+        <strong>Outbound Port Info:</strong> GitHub Actions runners block direct outbound TCP port 25 to protect against spam. To send real emails to Gmail (<code>faketype3@gmail.com</code>), select <strong>Gmail SMTP</strong> or <strong>Port 587 (STARTTLS)</strong> below with your SMTP relay or App Password!
+      </div>
+    </div>
+
+    <div id="alertBox" class="alert"></div>
+
+    <div class="grid">
+      <!-- Left Column: Compose & Outbound Settings -->
+      <div class="card">
+        <div class="card-title">
+          <span>✉️ Send Test Email</span>
+        </div>
+
+        <label>Select Delivery Profile / Target Port:</label>
+        <div class="preset-row">
+          <button type="button" class="preset-btn active" id="btnLocal" onclick="applyPreset('local')">🖥️ Local OryvexSMTP (Port 587)</button>
+          <button type="button" class="preset-btn" id="btnGmail" onclick="applyPreset('gmail')">📮 Gmail Relay (Port 587)</button>
+          <button type="button" class="preset-btn" id="btnBrevo" onclick="applyPreset('brevo')">⚡ Brevo (Port 587)</button>
+          <button type="button" class="preset-btn" id="btnSendgrid" onclick="applyPreset('sendgrid')">🚀 SendGrid (Port 587)</button>
+          <button type="button" class="preset-btn" id="btnCustom" onclick="applyPreset('custom')">⚙️ Custom Port (465/587)</button>
+        </div>
+
+        <form id="sendForm" onsubmit="handleSend(event)">
+          <div class="form-group">
+            <label for="toEmail">Recipient Email (To:)</label>
+            <input type="email" id="toEmail" required value="faketype3@gmail.com" placeholder="faketype3@gmail.com">
+          </div>
+
+          <div class="form-group">
+            <label for="fromEmail">Sender Email (From:)</label>
+            <input type="email" id="fromEmail" required value="test@postal-ci.local" placeholder="test@postal-ci.local">
+          </div>
+
+          <div class="form-group">
+            <label for="subject">Subject</label>
+            <input type="text" id="subject" required value="OryvexSMTP Live Test Delivery from GitHub Actions">
+          </div>
+
+          <div class="form-group">
+            <label for="messageBody">Message Body</label>
+            <textarea id="messageBody" required>Hello!
+
+This email was sent from the OryvexSMTP Web Portal running on GitHub Actions.
+Server: OryvexSMTP
+Status: Connected & Operational</textarea>
+          </div>
+
+          <details open>
+            <summary>⚙️ SMTP Server Connection Details</summary>
+            <div class="config-grid">
+              <div class="form-group">
+                <label for="smtpHost">SMTP Host / Server</label>
+                <input type="text" id="smtpHost" required value="127.0.0.1">
+              </div>
+              <div class="form-group">
+                <label for="smtpPort">SMTP Port</label>
+                <input type="number" id="smtpPort" required value="587">
+              </div>
+              <div class="form-group">
+                <label for="smtpUser">Username / API Key (Optional)</label>
+                <input type="text" id="smtpUser" value="ci/smtp" placeholder="ci/smtp or your@gmail.com">
+              </div>
+              <div class="form-group">
+                <label for="smtpPass">Password / App Secret (Optional)</label>
+                <input type="password" id="smtpPass" value="postal-ci-key" placeholder="App password">
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="sslMode">Security / TLS Mode</label>
+              <select id="sslMode">
+                <option value="none">None (Plain SMTP - Port 25/2525)</option>
+                <option value="starttls">STARTTLS (Port 587)</option>
+                <option value="ssl">Direct SSL/TLS (Port 465)</option>
+                <option value="auto" selected>Auto Negotiate</option>
+              </select>
+            </div>
+          </details>
+
+          <button type="submit" class="btn btn-primary" id="sendBtn">
+            <span>🚀 Send Test Email</span>
+          </button>
+        </form>
+      </div>
+
+      <!-- Right Column: Live Logs & Cloudflare DNS Guide -->
+      <div style="display: flex; flex-direction: column; gap: 20px;">
+        <div class="card">
+          <div class="card-title">
+            <span>🖥️ SMTP Live Transcript</span>
+            <button class="btn btn-secondary" onclick="clearTerminal()">Clear</button>
+          </div>
+          <div class="terminal" id="terminalOutput">Ready for SMTP activity...</div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">
+            <span>📋 Sent History</span>
+            <button class="btn btn-secondary" onclick="loadHistory()">Refresh</button>
+          </div>
+          <div style="overflow-x: auto;">
+            <table class="history-table">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Recipient</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="historyBody">
+                <tr><td colspan="3" style="text-align:center; color: var(--text-muted);">No messages sent yet in this session</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Cloudflare DNS Setup Guide Card -->
+        <div class="card">
+          <div class="card-title">
+            <span>🌐 Cloudflare DNS Setup (Sender Domain)</span>
+          </div>
+          <div class="form-group">
+            <label for="dnsDomain">Your Domain Name</label>
+            <div style="display: flex; gap: 8px;">
+              <input type="text" id="dnsDomain" value="yourdomain.com" placeholder="yourdomain.com">
+              <button type="button" class="btn btn-secondary" onclick="updateDnsTable()">Generate</button>
+            </div>
+          </div>
+          <div style="overflow-x: auto;">
+            <table class="dns-table">
+              <thead>
+                <tr>
+                  <th>Type</th>
+                  <th>Name</th>
+                  <th>Content / Value</th>
+                  <th>Proxy</th>
+                </tr>
+              </thead>
+              <tbody id="dnsTableBody">
+                <!-- Dynamically generated -->
+              </tbody>
+            </table>
+          </div>
+          <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 8px;">
+            ⚠️ <em>Important in Cloudflare:</em> Set Proxy status to <strong>DNS only</strong> (grey cloud) for mail records.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const presets = {
+      local: {
+        host: '127.0.0.1',
+        port: 587,
+        user: 'ci/smtp',
+        pass: 'postal-ci-key',
+        ssl: 'none',
+        from: 'test@postal-ci.local'
+      },
+      gmail: {
+        host: 'smtp.gmail.com',
+        port: 587,
+        user: 'faketype3@gmail.com',
+        pass: '',
+        ssl: 'starttls',
+        from: 'faketype3@gmail.com'
+      },
+      brevo: {
+        host: 'smtp-relay.brevo.com',
+        port: 587,
+        user: '',
+        pass: '',
+        ssl: 'starttls',
+        from: 'test@yourdomain.com'
+      },
+      sendgrid: {
+        host: 'smtp.sendgrid.net',
+        port: 587,
+        user: 'apikey',
+        pass: '',
+        ssl: 'starttls',
+        from: 'test@yourdomain.com'
+      },
+      custom: {
+        host: '',
+        port: 587,
+        user: '',
+        pass: '',
+        ssl: 'starttls',
+        from: 'test@yourdomain.com'
+      }
+    };
+
+    function applyPreset(name) {
+      document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+      const btn = document.getElementById('btn' + name.charAt(0).toUpperCase() + name.slice(1));
+      if (btn) btn.classList.add('active');
+
+      const p = presets[name];
+      if (!p) return;
+      document.getElementById('smtpHost').value = p.host;
+      document.getElementById('smtpPort').value = p.port;
+      document.getElementById('smtpUser').value = p.user;
+      document.getElementById('smtpPass').value = p.pass;
+      document.getElementById('sslMode').value = p.ssl;
+      document.getElementById('fromEmail').value = p.from;
+      appendTerminal(`[UI] Switched profile to ${name.toUpperCase()} (Host: ${p.host || 'custom'}:${p.port}, SSL: ${p.ssl})`);
+    }
+
+    function appendTerminal(line, type = '') {
+      const term = document.getElementById('terminalOutput');
+      const div = document.createElement('div');
+      if (type) div.className = type;
+      div.textContent = line;
+      term.appendChild(div);
+      term.scrollTop = term.scrollHeight;
+    }
+
+    function clearTerminal() {
+      document.getElementById('terminalOutput').innerHTML = '';
+      appendTerminal('Console cleared.');
+    }
+
+    function showAlert(msg, isSuccess = true) {
+      const box = document.getElementById('alertBox');
+      box.className = 'alert ' + (isSuccess ? 'alert-success' : 'alert-danger');
+      box.textContent = msg;
+      box.style.display = 'block';
+      setTimeout(() => { box.style.display = 'none'; }, 9000);
+    }
+
+    function copyToClipboard(text) {
+      navigator.clipboard.writeText(text).then(() => {
+        showAlert('Copied to clipboard: ' + text.substring(0, 30) + '...', true);
+      }).catch(err => {
+        prompt('Copy this value:', text);
+      });
+    }
+
+    async function checkStatus() {
+      const dot = document.getElementById('statusDot');
+      const txt = document.getElementById('statusText');
+      dot.className = 'badge-dot';
+      txt.textContent = 'Checking...';
+
+      try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+        if (data.online) {
+          dot.className = 'badge-dot online';
+          txt.textContent = `Online (${data.latency_ms}ms)`;
+        } else {
+          dot.className = 'badge-dot offline';
+          txt.textContent = 'Offline';
+        }
+      } catch (err) {
+        dot.className = 'badge-dot offline';
+        txt.textContent = 'Offline';
+      }
+    }
+
+    async function handleSend(e) {
+      e.preventDefault();
+      const sendBtn = document.getElementById('sendBtn');
+      sendBtn.disabled = true;
+      sendBtn.innerHTML = '<span>⏳ Sending...</span>';
+
+      const payload = {
+        to: document.getElementById('toEmail').value.trim(),
+        from: document.getElementById('fromEmail').value.trim(),
+        subject: document.getElementById('subject').value.trim(),
+        body: document.getElementById('messageBody').value,
+        host: document.getElementById('smtpHost').value.trim(),
+        port: parseInt(document.getElementById('smtpPort').value, 10),
+        username: document.getElementById('smtpUser').value.trim(),
+        password: document.getElementById('smtpPass').value.trim(),
+        ssl_mode: document.getElementById('sslMode').value
+      };
+
+      appendTerminal(`\n--- Sending email to ${payload.to} via ${payload.host}:${payload.port} ---`, 'term-in');
+
+      try {
+        const res = await fetch('/api/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+
+        if (data.transcript && data.transcript.length > 0) {
+          data.transcript.forEach(line => {
+            const cls = line.startsWith('<- 250') || line.includes('Accepted') ? 'term-out' :
+                        line.startsWith('<- ERROR') ? 'term-err' :
+                        line.startsWith('->') ? 'term-in' : '';
+            appendTerminal(line, cls);
+          });
+        }
+
+        if (data.success) {
+          showAlert(`✅ Success: ${data.message} (Recipient: ${payload.to})`, true);
+        } else {
+          showAlert(`❌ Failed: ${data.message}`, false);
+        }
+        loadHistory();
+      } catch (err) {
+        appendTerminal(`Network/API error: ${err.message}`, 'term-err');
+        showAlert(`Error: ${err.message}`, false);
+      } finally {
+        sendBtn.disabled = false;
+        sendBtn.innerHTML = '<span>🚀 Send Test Email</span>';
+      }
+    }
+
+    async function loadHistory() {
+      try {
+        const res = await fetch('/api/history');
+        const data = await res.json();
+        const tbody = document.getElementById('historyBody');
+        if (!data.history || data.history.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color: var(--text-muted);">No messages sent yet in this session</td></tr>';
+          return;
+        }
+        tbody.innerHTML = data.history.map(item => `
+          <tr>
+            <td>${item.timestamp.split(' ')[1]}</td>
+            <td><strong>${item.to}</strong><br><span style="color:var(--text-muted);font-size:0.75rem">${item.subject}</span></td>
+            <td><span class="status-badge ${item.status.startsWith('Accepted') ? 'status-ok' : 'status-fail'}">${item.status}</span></td>
+          </tr>
+        `).join('');
+      } catch (e) {
+        console.error('History load failed', e);
+      }
+    }
+
+    function updateDnsTable() {
+      const dom = document.getElementById('dnsDomain').value.trim() || 'yourdomain.com';
+      const records = [
+        { type: 'TXT', name: '@', val: `v=spf1 include:_spf.mx.cloudflare.net ~all`, proxy: 'DNS only' },
+        { type: 'TXT', name: `postal._domainkey`, val: `v=DKIM1; k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC3r...`, proxy: 'DNS only' },
+        { type: 'TXT', name: `_dmarc`, val: `v=DMARC1; p=none; rua=mailto:postmaster@${dom}`, proxy: 'DNS only' },
+        { type: 'CNAME', name: `psrp`, val: `rp.postal.example.com`, proxy: 'DNS only' },
+        { type: 'MX', name: `@`, val: `mail.${dom} (Priority: 10)`, proxy: 'DNS only' }
+      ];
+
+      const tbody = document.getElementById('dnsTableBody');
+      tbody.innerHTML = records.map(r => `
+        <tr>
+          <td><span style="font-weight:600; color:#38bdf8">${r.type}</span></td>
+          <td><code>${r.name}</code></td>
+          <td><code>${r.val}</code> <button class="copy-btn" onclick="copyToClipboard('${r.val}')">Copy</button></td>
+          <td><span style="color:#94a3b8">${r.proxy}</span></td>
+        </tr>
+      `).join('');
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      checkStatus();
+      loadHistory();
+      updateDnsTable();
+      setInterval(checkStatus, 30000);
+    });
+  </script>
+</body>
+</html>
