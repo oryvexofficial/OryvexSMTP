@@ -2,7 +2,9 @@
 
 class SMTPSender
 
-  include Klogger::InstanceMethods
+  def logger
+    Postal.logger
+  end
 
   attr_reader :domain
   attr_reader :endpoints
