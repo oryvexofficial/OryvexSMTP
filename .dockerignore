@@ -17,3 +17,5 @@ storage/*
 tmp/*
 vendor/bundle
 vendor/bundle
+instance/*
+.env

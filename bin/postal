@@ -48,10 +48,6 @@ case "$1" in
         run "bundle exec ruby script/make_user.rb"
         ;;
 
-    ci-smtp-setup)
-        run "bundle exec ruby script/ci_smtp_setup.rb"
-        ;;
-
     test-app-smtp)
         run "bundle exec ruby script/test_app_smtp.rb $2"
         ;;

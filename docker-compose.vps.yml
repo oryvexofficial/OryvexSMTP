@@ -1,0 +1,87 @@
+name: oryvexsmtp
+
+x-oryvex: &oryvex
+  build:
+    context: .
+    target: full
+  image: oryvexsmtp:local
+  restart: unless-stopped
+  volumes:
+    - "./instance:/config"
+  environment: &oryvex-env
+    POSTAL_CONFIG_FILE_PATH: /config/postal.yml
+    POSTAL_SIGNING_KEY_PATH: /config/signing.key
+    WAIT_FOR_TARGETS: "mariadb:3306"
+    WAIT_FOR_TIMEOUT: "90"
+
+services:
+  mariadb:
+    image: mariadb:10.11
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:?run deploy/install.sh first}
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - mariadb_data:/var/lib/mysql
+
+  # Runs database setup and migrations on every start, then exits.
+  oryvex-init:
+    <<: *oryvex
+    restart: "no"
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    command: ["postal", "initialize"]
+
+  oryvex-web:
+    <<: *oryvex
+    depends_on:
+      oryvex-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *oryvex-env
+      BIND_ADDRESS: 0.0.0.0
+    command: ["postal", "web-server"]
+
+  oryvex-smtp:
+    <<: *oryvex
+    depends_on:
+      oryvex-init:
+        condition: service_completed_successfully
+    ports:
+      - "25:25"
+      - "587:25"
+    command: ["postal", "smtp-server"]
+
+  oryvex-worker:
+    <<: *oryvex
+    depends_on:
+      oryvex-init:
+        condition: service_completed_successfully
+    command: ["postal", "worker"]
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - oryvex-web
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:?run deploy/install.sh first}
+      ACME_EMAIL: ${ACME_EMAIL:?run deploy/install.sh first}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  mariadb_data:
+  caddy_data:
+  caddy_config:

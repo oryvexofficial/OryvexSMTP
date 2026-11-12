@@ -1,0 +1,8 @@
+{
+	email {$ACME_EMAIL}
+}
+
+mail.{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy oryvex-web:5000
+}
