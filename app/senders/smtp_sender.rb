@@ -16,10 +16,11 @@ class SMTPSender
   # @param domain [String] the domain to send to
   # @param servers [Array<SMTPClient::Server>] a list of servers to use (default: nil, will resolve)
   # @param source_ip_address [IPAddress] the source IP address to use for this sender
-  def initialize(domain, servers: nil, source_ip_address: nil)
+  def initialize(domain, source_ip = nil, servers: nil, source_ip_address: nil, rcpt_to: nil)
     @domain = domain
     @servers = servers
-    @source_ip_address = source_ip_address
+    @source_ip_address = source_ip_address || source_ip
+    @rcpt_to = rcpt_to
     @endpoints = []
     @connection_errors = []
   end
@@ -57,15 +58,13 @@ class SMTPSender
     mail_from = determine_mail_from_for_message(message)
     raw_message = message.raw_message
 
-    # Append the Resent-Sender header to the mesage to include the
-    # authenticated user or server.
-    resent_sender = determine_resent_sender_header_for_message(message)
-    if resent_sender
-      raw_message = "Resent-Sender: #{resent_sender}\r\n" + raw_message
+    # Add a Resent-Sender header only when Postal is configured to do so.
+    if Postal::Config.postal.use_resent_sender_header?
+      raw_message = "Resent-Sender: #{mail_from}\r\n" + raw_message
     end
 
     begin
-      @current_endpoint.send_message(raw_message, mail_from, message.rcpt_to)
+      @current_endpoint.send_message(raw_message, mail_from, @rcpt_to || message.rcpt_to)
       create_result("Sent") do |r|
         r.details = "Message sent to #{@current_endpoint} for #{message.rcpt_to}"
       end
@@ -115,45 +114,24 @@ class SMTPSender
     "#{message.server.token}@#{return_path_domain}"
   end
 
-  # Determine what Resent-Sender header should be added to the message. This will
-  # be used to identify the user or server that sent the message.
-  #
-  # @param message [QueuedMessage]
-  # @return [String]
-  def determine_resent_sender_header_for_message(message)
-    server = message.server
-    return if server.nil?
-
-    case server.resend_sender_header_mode
-    when "None"
-      nil
-    when "Token"
-      "#{server.token}@#{Postal::Config.postal.smtp_hostname}"
-    when "Custom"
-      server.custom_resent_sender_header
-    else
-      "#{server.full_permalink}@#{Postal::Config.postal.smtp_hostname}"
-    end
-  end
-
   # Create a SendResult object for the given status
   #
   # @param status [String]
   # @return [SendResult]
   def create_result(status, &block)
     SendResult.new.tap do |r|
-      r.status = status
-      r.secure = @current_endpoint&.smtp_client&.tls? || false
+      r.type = status
+      r.secure = @current_endpoint&.smtp_client&.secure_socket? || false
       block.call(r) if block_given?
     end
   end
 
   # Return an array of server hostnames which should receive this message
-  # Uses configured non-25 port (defaults to 587 or POSTAL_OUTBOUND_SMTP_PORT).
+  # Direct delivery to recipient MX hosts uses port 25 by default.
   #
   # @return [Array<SMTPClient::Server>]
   def resolve_mx_records_for_domain
-    outbound_port = (ENV["POSTAL_OUTBOUND_SMTP_PORT"] || 587).to_i
+    outbound_port = (ENV["POSTAL_OUTBOUND_SMTP_PORT"] || 25).to_i
     ssl_mode = ENV["POSTAL_OUTBOUND_SSL_MODE"] || SMTPClient::SSLModes::AUTO
     hostnames = DNSResolver.local.mx(@domain, raise_timeout_errors: true).map(&:last)
     return [SMTPClient::Server.new(@domain, port: outbound_port, ssl_mode: ssl_mode)] if hostnames.empty?

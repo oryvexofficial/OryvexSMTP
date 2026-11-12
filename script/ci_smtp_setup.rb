@@ -50,6 +50,7 @@ puts "Sender domain: #{domain.name} (verified)"
 # Write DNS record details to /config/dns_records.json
 begin
   dns_data = {
+    ready: true,
     domain: domain.name,
     spf_record: domain.spf_record,
     dkim_name: domain.dkim_record_name,
@@ -57,7 +58,8 @@ begin
     dmarc_name: "_dmarc.#{domain.name}",
     dmarc_record: "v=DMARC1; p=none; rua=mailto:postmaster@#{domain.name}",
     return_path_domain: domain.return_path_domain,
-    return_path_target: Postal::Config.dns.return_path_domain
+    return_path_target: Postal::Config.dns.return_path_domain,
+    mx_records: Postal::Config.dns.mx_records || []
   }
   File.write("/config/dns_records.json", JSON.pretty_generate(dns_data))
   puts "DNS setup exported to /config/dns_records.json"

@@ -5,8 +5,7 @@ on:
     inputs:
       sender_domain:
         description: "Your sender domain (e.g. yourdomain.com)"
-        required: false
-        default: "yourdomain.com"
+        required: true
         type: string
       test_recipient:
         description: "Test recipient email address"
@@ -17,11 +16,6 @@ on:
         description: "Minutes to keep web portal active (e.g. 60; set 0 to run tests and exit)"
         required: false
         default: "60"
-        type: string
-      smtp_port:
-        description: "SMTP port (default 587)"
-        required: false
-        default: "587"
         type: string
       server_mode:
         description: "Server Mode"
@@ -44,15 +38,48 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Validate sender domain
+        env:
+          SENDER_DOMAIN: ${{ inputs.sender_domain }}
+        run: |
+          python3 -c 'import os, re, sys; d=os.environ["SENDER_DOMAIN"]; ok=len(d)<=253 and "." in d and all(re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", p) for p in d.split(".")); sys.exit(0 if ok else "Use a real lowercase domain, for example example.org")'
+
+      - name: Generate and show credentials for this run
+        run: |
+          PORTAL_PASSWORD="$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')"
+          POSTAL_CI_CREDENTIAL_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+          {
+            echo "PORTAL_PASSWORD=$PORTAL_PASSWORD"
+            echo "POSTAL_CI_CREDENTIAL_KEY=$POSTAL_CI_CREDENTIAL_KEY"
+          } >> "$GITHUB_ENV"
+          echo "WARNING: Anyone who can read these logs can access the running portal."
+          echo "Portal username: oryvex"
+          echo "Portal password: $PORTAL_PASSWORD"
+          echo "Local SMTP username: ci/smtp"
+          echo "Local SMTP password: $POSTAL_CI_CREDENTIAL_KEY"
+          {
+            echo '## Credentials for this run'
+            echo '**Warning:** Anyone who can view this summary can access the portal while it is running.'
+            echo '- Portal username: `oryvex`'
+            echo "- Portal password: \`$PORTAL_PASSWORD\`"
+            echo '- Local SMTP username: `ci/smtp`'
+            echo "- Local SMTP password: \`$POSTAL_CI_CREDENTIAL_KEY\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Prepare generated DNS output file
+        run: |
+          : > docker/ci-config/dns_records.json
+          chmod 666 docker/ci-config/dns_records.json
+
       - name: Build Postal Docker Image
         run: docker compose -f docker-compose.smtp.yml build
 
-      - name: Start Postal SMTP Services (Port ${{ inputs.smtp_port || '587' }})
+      - name: Start Postal SMTP Services (Port 587)
         env:
           POSTAL_CI_SERVER_MODE: ${{ inputs.server_mode || 'Live' }}
-          POSTAL_CI_DOMAIN: ${{ inputs.sender_domain || 'yourdomain.com' }}
-          POSTAL_CI_CREDENTIAL_KEY: ${{ secrets.POSTAL_CI_CREDENTIAL_KEY }}
-          POSTAL_OUTBOUND_SMTP_PORT: ${{ inputs.smtp_port || '587' }}
+          POSTAL_CI_DOMAIN: ${{ inputs.sender_domain }}
+          POSTAL_CI_CREDENTIAL_KEY: ${{ env.POSTAL_CI_CREDENTIAL_KEY }}
+          POSTAL_OUTBOUND_SMTP_PORT: "25"
         run: |
           docker compose -f docker-compose.smtp.yml up -d
           docker compose -f docker-compose.smtp.yml ps
@@ -65,10 +92,10 @@ jobs:
       - name: Verify SMTP Server and Send Test Email
         env:
           SMTP_HOST: 127.0.0.1
-          SMTP_PORT: ${{ inputs.smtp_port || '587' }}
+          SMTP_PORT: 587
           SMTP_USERNAME: ci/smtp
-          SMTP_PASSWORD: ${{ secrets.POSTAL_CI_CREDENTIAL_KEY || 'postal-ci-key' }}
-          SMTP_FROM: test@${{ inputs.sender_domain || 'yourdomain.com' }}
+          SMTP_PASSWORD: ${{ env.POSTAL_CI_CREDENTIAL_KEY }}
+          SMTP_FROM: test@${{ inputs.sender_domain }}
           SMTP_TO: ${{ inputs.test_recipient || 'faketype3@gmail.com' }}
         run: python script/test_smtp_client.py
 
@@ -82,13 +109,14 @@ jobs:
       - name: Start OryvexSMTP Web Portal
         env:
           SMTP_HOST: 127.0.0.1
-          SMTP_PORT: ${{ inputs.smtp_port || '587' }}
+          SMTP_PORT: 587
           SMTP_USERNAME: ci/smtp
-          SMTP_PASSWORD: ${{ secrets.POSTAL_CI_CREDENTIAL_KEY || 'postal-ci-key' }}
-          SMTP_FROM: test@${{ inputs.sender_domain || 'yourdomain.com' }}
+          SMTP_PASSWORD: ${{ env.POSTAL_CI_CREDENTIAL_KEY }}
+          SMTP_FROM: test@${{ inputs.sender_domain }}
           DEFAULT_TO: ${{ inputs.test_recipient || 'faketype3@gmail.com' }}
           WEB_PORT: 8080
           WEB_HOST: 0.0.0.0
+          PORTAL_PASSWORD: ${{ env.PORTAL_PASSWORD }}
         run: |
           echo "Starting web server on port 8080..."
           python3 web/app.py > /tmp/web_portal.log 2>&1 &
@@ -100,7 +128,7 @@ jobs:
             fi
             sleep 1
           done
-          curl -I http://127.0.0.1:8080/ || (echo "Web portal failed to respond:"; cat /tmp/web_portal.log && exit 1)
+          curl -I http://127.0.0.1:8080/health || (echo "Web portal failed to respond:"; cat /tmp/web_portal.log && exit 1)
           echo "Web portal started successfully."
 
       - name: Expose Web Portal via TryCloudflare
@@ -133,9 +161,8 @@ jobs:
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "👉 **[Open OryvexSMTP Web Portal]($TUNNEL_URL)**" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "- **Sender Domain:** \`${{ inputs.sender_domain || 'yourdomain.com' }}\`" >> $GITHUB_STEP_SUMMARY
-            echo "- **Recipient:** \`${{ inputs.test_recipient || 'faketype3@gmail.com' }}\`" >> $GITHUB_STEP_SUMMARY
-            echo "- **SMTP Port:** \`${{ inputs.smtp_port || '587' }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "Sender domain configured for this run." >> $GITHUB_STEP_SUMMARY
+            echo "- **SMTP Port:** \`587\`" >> $GITHUB_STEP_SUMMARY
             echo "- **Server Mode:** \`${{ inputs.server_mode || 'Live' }}\`" >> $GITHUB_STEP_SUMMARY
             echo "- **Tunnel Duration:** \`${{ inputs.tunnel_duration || '60' }}\` minutes" >> $GITHUB_STEP_SUMMARY
           else

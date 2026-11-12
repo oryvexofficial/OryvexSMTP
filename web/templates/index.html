@@ -275,7 +275,7 @@
         <div class="brand-icon">📬</div>
         <div class="brand-title">
           <h1>OryvexSMTP Web Portal</h1>
-          <p>Hosted on GitHub Actions &bull; Exposed via TryCloudflare &bull; Multi-Port Delivery</p>
+          <p>Your local OryvexSMTP sender</p>
         </div>
       </div>
       <div class="badge" id="statusBadge">
@@ -285,12 +285,10 @@
       </div>
     </header>
 
-    <div class="notice">
-      <div class="notice-icon">💡</div>
-      <div>
-        <strong>Outbound Port Info:</strong> GitHub Actions runners block direct outbound TCP port 25 to protect against spam. To send real emails to Gmail (<code>faketype3@gmail.com</code>), select <strong>Gmail SMTP</strong> or <strong>Port 587 (STARTTLS)</strong> below with your SMTP relay or App Password!
-      </div>
-    </div>
+    <div class="notice"><div class="notice-icon">💡</div><div>
+      Send through your own Postal server. Local submission uses plain SMTP over loopback only.
+      A successful submission means queued, not delivered. Direct delivery needs outbound port 25.
+    </div></div>
 
     <div id="alertBox" class="alert"></div>
 
@@ -301,24 +299,17 @@
           <span>✉️ Send Test Email</span>
         </div>
 
-        <label>Select Delivery Profile / Target Port:</label>
-        <div class="preset-row">
-          <button type="button" class="preset-btn active" id="btnLocal" onclick="applyPreset('local')">🖥️ Local OryvexSMTP (Port 587)</button>
-          <button type="button" class="preset-btn" id="btnGmail" onclick="applyPreset('gmail')">📮 Gmail Relay (Port 587)</button>
-          <button type="button" class="preset-btn" id="btnBrevo" onclick="applyPreset('brevo')">⚡ Brevo (Port 587)</button>
-          <button type="button" class="preset-btn" id="btnSendgrid" onclick="applyPreset('sendgrid')">🚀 SendGrid (Port 587)</button>
-          <button type="button" class="preset-btn" id="btnCustom" onclick="applyPreset('custom')">⚙️ Custom Port (465/587)</button>
-        </div>
+        <p>Server: local OryvexSMTP. Sender address comes from your configured domain.</p>
 
         <form id="sendForm" onsubmit="handleSend(event)">
           <div class="form-group">
             <label for="toEmail">Recipient Email (To:)</label>
-            <input type="email" id="toEmail" required value="faketype3@gmail.com" placeholder="faketype3@gmail.com">
+            <input type="email" id="toEmail" required placeholder="recipient@example.com">
           </div>
 
           <div class="form-group">
             <label for="fromEmail">Sender Email (From:)</label>
-            <input type="email" id="fromEmail" required value="test@postal-ci.local" placeholder="test@postal-ci.local">
+            <input type="email" id="fromEmail" required placeholder="test@your-domain.com">
           </div>
 
           <div class="form-group">
@@ -335,36 +326,7 @@ Server: OryvexSMTP
 Status: Connected & Operational</textarea>
           </div>
 
-          <details open>
-            <summary>⚙️ SMTP Server Connection Details</summary>
-            <div class="config-grid">
-              <div class="form-group">
-                <label for="smtpHost">SMTP Host / Server</label>
-                <input type="text" id="smtpHost" required value="127.0.0.1">
-              </div>
-              <div class="form-group">
-                <label for="smtpPort">SMTP Port</label>
-                <input type="number" id="smtpPort" required value="587">
-              </div>
-              <div class="form-group">
-                <label for="smtpUser">Username / API Key (Optional)</label>
-                <input type="text" id="smtpUser" value="ci/smtp" placeholder="ci/smtp or your@gmail.com">
-              </div>
-              <div class="form-group">
-                <label for="smtpPass">Password / App Secret (Optional)</label>
-                <input type="password" id="smtpPass" value="postal-ci-key" placeholder="App password">
-              </div>
-            </div>
-            <div class="form-group">
-              <label for="sslMode">Security / TLS Mode</label>
-              <select id="sslMode">
-                <option value="none">None (Plain SMTP - Port 25/2525)</option>
-                <option value="starttls">STARTTLS (Port 587)</option>
-                <option value="ssl">Direct SSL/TLS (Port 465)</option>
-                <option value="auto" selected>Auto Negotiate</option>
-              </select>
-            </div>
-          </details>
+          <p style="font-size: 0.9rem; color: var(--text-muted);">Connection and credentials are configured on the server, not in the browser.</p>
 
           <button type="submit" class="btn btn-primary" id="sendBtn">
             <span>🚀 Send Test Email</span>
@@ -409,10 +371,10 @@ Status: Connected & Operational</textarea>
             <span>🌐 Cloudflare DNS Setup (Sender Domain)</span>
           </div>
           <div class="form-group">
-            <label for="dnsDomain">Your Domain Name</label>
+            <label for="dnsDomain">Domain configured when you started this run</label>
             <div style="display: flex; gap: 8px;">
-              <input type="text" id="dnsDomain" value="yourdomain.com" placeholder="yourdomain.com">
-              <button type="button" class="btn btn-secondary" onclick="updateDnsTable()">Generate</button>
+              <input type="text" id="dnsDomain" value="yourdomain.com" placeholder="yourdomain.com" readonly>
+              <button type="button" class="btn btn-secondary" onclick="updateDnsTable()">Refresh</button>
             </div>
           </div>
           <div style="overflow-x: auto;">
@@ -422,7 +384,7 @@ Status: Connected & Operational</textarea>
                   <th>Type</th>
                   <th>Name</th>
                   <th>Content / Value</th>
-                  <th>Proxy</th>
+                  <th>Priority / Proxy</th>
                 </tr>
               </thead>
               <tbody id="dnsTableBody">
@@ -431,7 +393,7 @@ Status: Connected & Operational</textarea>
             </table>
           </div>
           <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 8px;">
-            ⚠️ <em>Important in Cloudflare:</em> Set Proxy status to <strong>DNS only</strong> (grey cloud) for mail records.
+            ⚠️ Use your real Postal DNS settings. Example hostnames are hidden. Set mail host records to <strong>DNS only</strong>.
           </p>
         </div>
       </div>
@@ -439,65 +401,6 @@ Status: Connected & Operational</textarea>
   </div>
 
   <script>
-    const presets = {
-      local: {
-        host: '127.0.0.1',
-        port: 587,
-        user: 'ci/smtp',
-        pass: 'postal-ci-key',
-        ssl: 'none',
-        from: 'test@postal-ci.local'
-      },
-      gmail: {
-        host: 'smtp.gmail.com',
-        port: 587,
-        user: 'faketype3@gmail.com',
-        pass: '',
-        ssl: 'starttls',
-        from: 'faketype3@gmail.com'
-      },
-      brevo: {
-        host: 'smtp-relay.brevo.com',
-        port: 587,
-        user: '',
-        pass: '',
-        ssl: 'starttls',
-        from: 'test@yourdomain.com'
-      },
-      sendgrid: {
-        host: 'smtp.sendgrid.net',
-        port: 587,
-        user: 'apikey',
-        pass: '',
-        ssl: 'starttls',
-        from: 'test@yourdomain.com'
-      },
-      custom: {
-        host: '',
-        port: 587,
-        user: '',
-        pass: '',
-        ssl: 'starttls',
-        from: 'test@yourdomain.com'
-      }
-    };
-
-    function applyPreset(name) {
-      document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
-      const btn = document.getElementById('btn' + name.charAt(0).toUpperCase() + name.slice(1));
-      if (btn) btn.classList.add('active');
-
-      const p = presets[name];
-      if (!p) return;
-      document.getElementById('smtpHost').value = p.host;
-      document.getElementById('smtpPort').value = p.port;
-      document.getElementById('smtpUser').value = p.user;
-      document.getElementById('smtpPass').value = p.pass;
-      document.getElementById('sslMode').value = p.ssl;
-      document.getElementById('fromEmail').value = p.from;
-      appendTerminal(`[UI] Switched profile to ${name.toUpperCase()} (Host: ${p.host || 'custom'}:${p.port}, SSL: ${p.ssl})`);
-    }
-
     function appendTerminal(line, type = '') {
       const term = document.getElementById('terminalOutput');
       const div = document.createElement('div');
@@ -537,6 +440,8 @@ Status: Connected & Operational</textarea>
       try {
         const res = await fetch('/api/status');
         const data = await res.json();
+        if (!document.getElementById('fromEmail').value && data.smtp_from) document.getElementById('fromEmail').value = data.smtp_from;
+        if (!document.getElementById('toEmail').value && data.default_to) document.getElementById('toEmail').value = data.default_to;
         if (data.online) {
           dot.className = 'badge-dot online';
           txt.textContent = `Online (${data.latency_ms}ms)`;
@@ -560,15 +465,10 @@ Status: Connected & Operational</textarea>
         to: document.getElementById('toEmail').value.trim(),
         from: document.getElementById('fromEmail').value.trim(),
         subject: document.getElementById('subject').value.trim(),
-        body: document.getElementById('messageBody').value,
-        host: document.getElementById('smtpHost').value.trim(),
-        port: parseInt(document.getElementById('smtpPort').value, 10),
-        username: document.getElementById('smtpUser').value.trim(),
-        password: document.getElementById('smtpPass').value.trim(),
-        ssl_mode: document.getElementById('sslMode').value
+        body: document.getElementById('messageBody').value
       };
 
-      appendTerminal(`\n--- Sending email to ${payload.to} via ${payload.host}:${payload.port} ---`, 'term-in');
+      appendTerminal(`\n--- Sending email to ${payload.to} via local OryvexSMTP ---`, 'term-in');
 
       try {
         const res = await fetch('/api/send', {
@@ -611,39 +511,98 @@ Status: Connected & Operational</textarea>
           tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color: var(--text-muted);">No messages sent yet in this session</td></tr>';
           return;
         }
-        tbody.innerHTML = data.history.map(item => `
-          <tr>
-            <td>${item.timestamp.split(' ')[1]}</td>
-            <td><strong>${item.to}</strong><br><span style="color:var(--text-muted);font-size:0.75rem">${item.subject}</span></td>
-            <td><span class="status-badge ${item.status.startsWith('Accepted') ? 'status-ok' : 'status-fail'}">${item.status}</span></td>
-          </tr>
-        `).join('');
+        tbody.replaceChildren();
+        for (const item of data.history) {
+          const row = document.createElement('tr');
+          for (const value of [item.timestamp.split(' ')[1], item.to + ' | ' + item.subject, item.status]) {
+            const cell = document.createElement('td');
+            cell.textContent = value;
+            row.appendChild(cell);
+          }
+          tbody.appendChild(row);
+        }
       } catch (e) {
         console.error('History load failed', e);
       }
     }
 
-    function updateDnsTable() {
-      const dom = document.getElementById('dnsDomain').value.trim() || 'yourdomain.com';
-      const records = [
-        { type: 'TXT', name: '@', val: `v=spf1 include:_spf.mx.cloudflare.net ~all`, proxy: 'DNS only' },
-        { type: 'TXT', name: `postal._domainkey`, val: `v=DKIM1; k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC3r...`, proxy: 'DNS only' },
-        { type: 'TXT', name: `_dmarc`, val: `v=DMARC1; p=none; rua=mailto:postmaster@${dom}`, proxy: 'DNS only' },
-        { type: 'CNAME', name: `psrp`, val: `rp.postal.example.com`, proxy: 'DNS only' },
-        { type: 'MX', name: `@`, val: `mail.${dom} (Priority: 10)`, proxy: 'DNS only' }
-      ];
-
+    function setDnsTableMessage(message) {
       const tbody = document.getElementById('dnsTableBody');
-      tbody.innerHTML = records.map(r => `
-        <tr>
-          <td><span style="font-weight:600; color:#38bdf8">${r.type}</span></td>
-          <td><code>${r.name}</code></td>
-          <td><code>${r.val}</code> <button class="copy-btn" onclick="copyToClipboard('${r.val}')">Copy</button></td>
-          <td><span style="color:#94a3b8">${r.proxy}</span></td>
-        </tr>
-      `).join('');
+      const row = document.createElement('tr');
+      const cell = document.createElement('td');
+      cell.colSpan = 4;
+      cell.textContent = message;
+      cell.style.color = 'var(--text-muted)';
+      row.appendChild(cell);
+      tbody.replaceChildren(row);
     }
 
+    async function updateDnsTable() {
+      const domainInput = document.getElementById('dnsDomain');
+      const dom = domainInput.value.trim() || 'yourdomain.com';
+      setDnsTableMessage('Loading generated DNS records...');
+
+      try {
+        const response = await fetch(`/api/dns-records?domain=${encodeURIComponent(dom)}`);
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || 'Could not load DNS records');
+        if (!data.ready || !data.dkim_name || !data.dkim_record || data.dkim_record.includes('...')) {
+          setDnsTableMessage(data.message || 'DNS records are not ready. Postal must start successfully before a real DKIM key can be shown. Do not publish a shortened sample.');
+          return;
+        }
+
+        if (data.domain && (dom === 'yourdomain.com' || !dom)) domainInput.value = data.domain;
+        const actualDomain = (data.domain || dom).toLowerCase().replace(/\.$/, '');
+        const relativeName = (name) => {
+          const value = (name || '').replace(/\.$/, '');
+          const suffix = `.${actualDomain}`;
+          return value.toLowerCase().endsWith(suffix) ? value.slice(0, -suffix.length) : value;
+        };
+        const records = [
+          { type: 'TXT', name: '@', val: data.spf_record, priority: '' },
+          { type: 'TXT', name: relativeName(data.dkim_name), val: data.dkim_record, priority: '' },
+          { type: 'TXT', name: '_dmarc', val: data.dmarc_record, priority: '' },
+          { type: 'CNAME', name: relativeName(data.return_path_domain), val: data.return_path_target, priority: '' },
+          ...(Array.isArray(data.mx_records) ? data.mx_records.map(host => ({ type: 'MX', name: '@', val: host, priority: '10' })) : [])
+        ].filter(record => record.name && record.val && !String(record.val).includes('postal.example.com'));
+
+        const tbody = document.getElementById('dnsTableBody');
+        tbody.replaceChildren();
+        for (const record of records) {
+          const row = document.createElement('tr');
+          const typeCell = document.createElement('td');
+          const typeLabel = document.createElement('span');
+          typeLabel.textContent = record.type;
+          typeLabel.style.fontWeight = '600';
+          typeLabel.style.color = '#38bdf8';
+          typeCell.appendChild(typeLabel);
+
+          const nameCell = document.createElement('td');
+          const nameCode = document.createElement('code');
+          nameCode.textContent = record.name;
+          nameCell.appendChild(nameCode);
+
+          const valueCell = document.createElement('td');
+          const valueCode = document.createElement('code');
+          valueCode.textContent = record.val;
+          valueCell.appendChild(valueCode);
+          const copyButton = document.createElement('button');
+          copyButton.className = 'copy-btn';
+          copyButton.type = 'button';
+          copyButton.textContent = 'Copy';
+          copyButton.addEventListener('click', () => copyToClipboard(record.val));
+          valueCell.appendChild(copyButton);
+
+          const noteCell = document.createElement('td');
+          noteCell.textContent = record.priority ? `Priority ${record.priority} / DNS only` : 'DNS only';
+          noteCell.style.color = '#94a3b8';
+          row.append(typeCell, nameCell, valueCell, noteCell);
+          tbody.appendChild(row);
+        }
+      } catch (error) {
+        setDnsTableMessage(`Could not load generated DNS records: ${error.message}. Check that Postal started successfully, then refresh.`);
+      }
+    }
     window.addEventListener('DOMContentLoaded', () => {
       checkStatus();
       loadHistory();

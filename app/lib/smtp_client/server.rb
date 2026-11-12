@@ -9,7 +9,7 @@ module SMTPClient
 
     def initialize(hostname, port: nil, ssl_mode: SSLModes::AUTO)
       @hostname = hostname
-      @port = (port || ENV.fetch("POSTAL_OUTBOUND_SMTP_PORT", 587)).to_i
+      @port = (port || ENV.fetch("POSTAL_OUTBOUND_SMTP_PORT", 25)).to_i
       @ssl_mode = ssl_mode
     end
 

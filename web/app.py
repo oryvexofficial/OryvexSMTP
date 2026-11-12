@@ -2,12 +2,15 @@
 """
 OryvexSMTP Web Portal
 A lightweight, dependency-free web interface to monitor and test-send emails
-through an OryvexSMTP server instance or external SMTP relays (Port 587 / 465).
+through the local OryvexSMTP server.
 """
 
 import os
 import sys
 import json
+import base64
+import binascii
+import hmac
 import time
 import ssl
 import socket
@@ -19,7 +22,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
 # Configuration with environment defaults
-SMTP_HOST = os.environ.get("SMTP_HOST", "127.0.0.1")
+SMTP_HOST = "127.0.0.1"
 SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
 SMTP_USERNAME = os.environ.get("SMTP_USERNAME", "ci/smtp")
 SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "postal-ci-key")
@@ -27,6 +30,7 @@ SMTP_FROM = os.environ.get("SMTP_FROM", "test@postal-ci.local")
 DEFAULT_TO = os.environ.get("DEFAULT_TO", "faketype3@gmail.com")
 WEB_HOST = os.environ.get("WEB_HOST", "0.0.0.0")
 WEB_PORT = int(os.environ.get("WEB_PORT", "8080"))
+PORTAL_PASSWORD = os.environ.get("PORTAL_PASSWORD", "")
 DNS_FILE_PATH = os.environ.get("DNS_FILE_PATH", os.path.join(os.path.dirname(__file__), "..", "docker", "ci-config", "dns_records.json"))
 
 # Sent history storage (in-memory)
@@ -54,7 +58,7 @@ def check_smtp_health(host=SMTP_HOST, port=SMTP_PORT, timeout=3):
 def send_smtp_email(to_addr, subject, body, from_addr=SMTP_FROM,
                     host=SMTP_HOST, port=SMTP_PORT,
                     username=None, password=None,
-                    ssl_mode="auto", is_html=False):
+                    ssl_mode="none", is_html=False):
     """
     Send an email via SMTP supporting:
     - Standard SMTP (Port 25, 2525)
@@ -86,8 +90,8 @@ def send_smtp_email(to_addr, subject, body, from_addr=SMTP_FROM,
         transcript.append(f"-> EHLO client.local")
         transcript.append(f"<- {code} {ehlo_resp.decode(errors='replace').strip()}")
 
-        if not is_direct_ssl and (ssl_mode in ("starttls", "auto") or port == 587):
-            if client.has_extn("STARTTLS") or port == 587:
+        if not is_direct_ssl and ssl_mode in ("starttls", "auto"):
+            if client.has_extn("STARTTLS"):
                 transcript.append(f"-> STARTTLS")
                 client.starttls(context=tls_context)
                 code, ehlo_resp = client.ehlo()
@@ -133,7 +137,7 @@ def send_smtp_email(to_addr, subject, body, from_addr=SMTP_FROM,
         if len(SENT_HISTORY) > MAX_HISTORY:
             SENT_HISTORY.pop()
 
-        return True, "Email successfully queued/accepted for delivery!", transcript
+        return True, "Accepted by the local server and queued. This does not confirm inbox delivery.", transcript
 
     except Exception as e:
         error_msg = f"SMTP Error: {str(e)}"
@@ -162,12 +166,16 @@ def send_smtp_email(to_addr, subject, body, from_addr=SMTP_FROM,
 
 
 def get_cloudflare_dns_guide(domain_name="yourdomain.com"):
-    """Generate exact Cloudflare DNS records for a given sender domain."""
+    """Return generated DNS records, never sample or truncated DKIM data."""
     dns_file = DNS_FILE_PATH
     if os.path.exists(dns_file):
         try:
             with open(dns_file, "r") as f:
                 data = json.load(f)
+            dkim_record = data.get("dkim_record", "")
+            if dkim_record and "..." not in dkim_record:
+                data["ready"] = True
+                data.setdefault("mx_records", [])
                 return data
         except Exception:
             pass
@@ -175,13 +183,16 @@ def get_cloudflare_dns_guide(domain_name="yourdomain.com"):
     clean_domain = domain_name.strip().lower()
     return {
         "domain": clean_domain,
-        "spf_record": f"v=spf1 include:_spf.mx.cloudflare.net ~all",
-        "dkim_name": f"postal._domainkey.{clean_domain}",
-        "dkim_record": "v=DKIM1; k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC3r...",
-        "dmarc_name": f"_dmarc.{clean_domain}",
-        "dmarc_record": f"v=DMARC1; p=none; rua=mailto:postmaster@{clean_domain}",
-        "return_path_domain": f"psrp.{clean_domain}",
-        "return_path_target": "rp.postal.example.com"
+        "ready": False,
+        "message": "Postal has not generated the DNS records yet. Wait for Postal startup to succeed, then reload. Do not publish sample or shortened DKIM values.",
+        "spf_record": "",
+        "dkim_name": "",
+        "dkim_record": "",
+        "dmarc_name": "",
+        "dmarc_record": "",
+        "return_path_domain": "",
+        "return_path_target": "",
+        "mx_records": []
     }
 
 
@@ -198,20 +209,37 @@ class OryvexHTTPHandler(BaseHTTPRequestHandler):
         self.send_response(status_code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(response_bytes)))
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, HEAD, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
         self.wfile.write(response_bytes)
 
-    def do_OPTIONS(self):
-        self.send_response(204)
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, HEAD, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+    def authorized(self):
+        if not PORTAL_PASSWORD:
+            self.send_error(503, "Portal password not configured")
+            return False
+        header = self.headers.get("Authorization", "")
+        try:
+            scheme, encoded = header.split(" ", 1)
+            decoded = base64.b64decode(encoded, validate=True).decode("utf-8")
+            username, password = decoded.split(":", 1)
+            valid = (scheme.lower() == "basic" and
+                     hmac.compare_digest(username, "oryvex") and
+                     hmac.compare_digest(password.encode("utf-8"), PORTAL_PASSWORD.encode("utf-8")))
+        except (ValueError, UnicodeError, binascii.Error):
+            valid = False
+        if valid:
+            return True
+        self.send_response(401)
+        self.send_header("WWW-Authenticate", 'Basic realm="OryvexSMTP"')
+        self.send_header("Content-Length", "0")
         self.end_headers()
+        return False
+
+    def do_OPTIONS(self):
+        self.send_error(405)
 
     def do_HEAD(self):
+        if urlparse(self.path).path != "/health" and not self.authorized():
+            return
         parsed = urlparse(self.path)
         path = parsed.path
 
@@ -238,6 +266,8 @@ class OryvexHTTPHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
     def do_GET(self):
+        if urlparse(self.path).path != "/health" and not self.authorized():
+            return
         parsed = urlparse(self.path)
         path = parsed.path
         query = parse_qs(parsed.query)
@@ -293,13 +323,22 @@ class OryvexHTTPHandler(BaseHTTPRequestHandler):
             self.wfile.write(b"Not Found")
 
     def do_POST(self):
+        if not self.authorized():
+            return
+        origin = self.headers.get("Origin")
+        if origin and urlparse(origin).netloc != self.headers.get("Host"):
+            self.send_error(403, "Origin not allowed")
+            return
+        if self.headers.get_content_type() != "application/json":
+            self.send_error(415, "Expected application/json")
+            return
         parsed = urlparse(self.path)
         path = parsed.path
 
         if path == "/api/send":
             content_length = int(self.headers.get("Content-Length", 0))
-            if content_length <= 0:
-                self.send_json_response(400, {"success": False, "message": "Empty request body"})
+            if content_length <= 0 or content_length > 100_000:
+                self.send_json_response(400, {"success": False, "message": "Invalid request size"})
                 return
 
             body_data = self.rfile.read(content_length).decode("utf-8")
@@ -313,12 +352,13 @@ class OryvexHTTPHandler(BaseHTTPRequestHandler):
             from_addr = payload.get("from") or SMTP_FROM
             subject = payload.get("subject", "Test Email from OryvexSMTP")
             body = payload.get("body", "This is a test email sent from the OryvexSMTP Web Portal.")
-            host = payload.get("host") or SMTP_HOST
-            port = int(payload.get("port") or SMTP_PORT)
-            username = payload.get("username")
-            password = payload.get("password")
-            ssl_mode = payload.get("ssl_mode", "auto")
-            is_html = bool(payload.get("is_html", False))
+            # Do not accept host, port, credentials or TLS options from the browser.
+            host = SMTP_HOST
+            port = SMTP_PORT
+            username = SMTP_USERNAME
+            password = SMTP_PASSWORD
+            ssl_mode = "none"  # Loopback submission only; this is not public SMTP.
+            is_html = False
 
             success, message, transcript = send_smtp_email(
                 to_addr=to_addr,
@@ -351,9 +391,7 @@ class OryvexHTTPHandler(BaseHTTPRequestHandler):
                 except Exception:
                     pass
 
-            host = payload.get("host") or SMTP_HOST
-            port = int(payload.get("port") or SMTP_PORT)
-            online, message, transcript, latency = check_smtp_health(host, port)
+            online, message, transcript, latency = check_smtp_health(SMTP_HOST, SMTP_PORT)
             self.send_json_response(200, {
                 "online": online,
                 "message": message,
@@ -367,6 +405,8 @@ class OryvexHTTPHandler(BaseHTTPRequestHandler):
 
 
 def run_server():
+    if not PORTAL_PASSWORD:
+        raise RuntimeError("PORTAL_PASSWORD is required before starting the portal")
     server_address = (WEB_HOST, WEB_PORT)
     httpd = ThreadingHTTPServer(server_address, OryvexHTTPHandler)
     print(f"==================================================")
