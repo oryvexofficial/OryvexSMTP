@@ -3,7 +3,7 @@
 The portal submits messages to 127.0.0.1:587 on the runner using server-side SMTP credentials. It does not offer external relay profiles. Loopback SMTP is intentionally unencrypted; never expose it publicly. The TryCloudflare URL is an HTTPS website, not an SMTP hostname.
 
 1. Run the workflow with your real lowercase sender_domain and a test recipient. No GitHub secrets need to be configured.
-2. Open the run's Summary or the "Generate and show credentials for this run" step. A new random portal password and SMTP password are printed each run.
+2. Open the job and expand the "Keep Portal Active" step to see the portal URL, username, and password. The run Summary and "Generate and show credentials for this run" step also show credentials. New passwords are generated for each run.
 3. Open the portal link and sign in with username `oryvex` and the displayed portal password.
 4. The sender address defaults to test@your-domain; change it to an address at your configured domain if needed. Copy DNS records only when the portal says they are ready.
 

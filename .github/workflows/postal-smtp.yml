@@ -179,6 +179,9 @@ jobs:
         run: |
           echo "Holding runner open for $MINUTES minutes so you can use the web portal..."
           echo "Portal URL: $TUNNEL_URL"
+          echo "Portal username: oryvex"
+          echo "Portal password: $PORTAL_PASSWORD"
+          echo "WARNING: Anyone who can read this log can access the portal while this run is active."
           echo "To stop early, click 'Cancel run' in GitHub Actions."
           sleep $(( MINUTES * 60 ))
 
